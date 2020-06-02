@@ -1,0 +1,16 @@
+body {
+  background-color: #3f72af;
+}
+h1 {
+  color: #112d4e;
+  text-transform: uppercase;
+}
+h3 {
+  color: #112d4e;
+}
+hr {
+  border-style: dotted none none none;
+  border-color: grey;
+  border-width: 5px;
+  width: 10%;
+}

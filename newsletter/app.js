@@ -13,7 +13,7 @@ app.get("/", (req, res) => {
 })
 
 app.post("/", (req, res) => {
-  const mailChimpApi = "d4b7efe2b7b795212184fe2a269d2932-us10a";
+  const mailChimpApi = "d4b7efe2b7b795212184fe2a269d2932-us10";
   const audienceId = "4a72587245";
   const url = "https://us10.api.mailchimp.com/3.0/lists/" + audienceId;
 

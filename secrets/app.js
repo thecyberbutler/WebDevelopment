@@ -73,15 +73,14 @@ app.route("/login")
           if (result === true) {
             res.render("secrets");
           } else {
-            res.redirect("/login")
+            res.redirect("/login");
           }
-        )} else {
-            res.redirect("/login")
-        }
+        })
+      } else {
+          res.redirect("/login")
       }
-    )
-  }
-);
+    })
+  });
 
 app.route("/register")
   .get((req, res) => {

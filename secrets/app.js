@@ -3,37 +3,9 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const ejs = require('ejs');
 const mongoose = require('mongoose');
-const encrypt = require('mongoose-encryption');
-const sha = require('sha');
-const crypto = require('crypto');
-const bcrypt = require('bcrypt');
-
-const saltRounds = 10;
-
-var genRandomString = function(length){
-    return crypto.randomBytes(Math.ceil(length/2))
-            .toString('hex') /** convert to hexadecimal format */
-            .slice(0,length);   /** return required number of characters */
-};
-
-var sha512 = function(password, salt){
-    var hash = crypto.createHmac('sha512', salt); /** Hashing algorithm sha512 */
-    hash.update(password);
-    var value = hash.digest('hex');
-    return {
-        salt:salt,
-        passwordHash:value
-    };
-};
-
-function saltHashPassword(userpassword) {
-    var salt = genRandomString(64); /** Gives us salt of length 16 */
-    var passwordData = sha512(userpassword, salt);
-    // console.log('UserPassword = '+userpassword);
-    // console.log('Passwordhash = '+passwordData.passwordHash);
-    // console.log('nSalt = '+passwordData.salt);
-    return passwordData
-}
+const session = require('express-session');
+const passport = require('passport');
+const passportLocalMongoose = require('passport-local-mongoose');
 
 const app = express();
 
@@ -41,43 +13,64 @@ app.use(express.static("public"));
 app.set('view engine', 'ejs');
 app.use(bodyParser.urlencoded({extended: true}));
 
+app.use(session({
+  secret: process.env.SECRETKEY,
+  resave: false,
+  saveUninitialized: false
+}));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
 mongoose.connect("mongodb://192.168.159.200/users", { useNewUrlParser: true, useUnifiedTopology: true });
+mongoose.set('useCreateIndex', true);
 
 const userSchema = new mongoose.Schema({
   email: String,
   password: String
 });
 
+userSchema.plugin(passportLocalMongoose);
+
 // const secret = process.env.SECRETKEY
 // userSchema.plugin(encrypt, {secret: secret, encryptedFields: ['password']});
 
 const User = new mongoose.model("User", userSchema);
+
+passport.use(User.createStrategy());
+passport.serializeUser(User.serializeUser());
+passport.deserializeUser(User.deserializeUser());
 
 app.route("/")
   .get((req, res) => {
     res.render("home");
   });
 
+app.route("/secrets")
+  .get((req, res) => {
+    if (req.isAuthenticated()) {
+      res.render("secrets");
+    } else {
+      res.redirect("/login")
+    }
+  })
+
 app.route("/login")
   .get((req, res) => {
     res.render("login")
   })
   .post((req, res) => {
-    const username = req.body.username
-    const password = req.body.password
-    User.findOne({email: username}, (err, doc) => {
+    const user = new User({
+      username: req.body.username,
+      password: req.body.password
+    });
+    req.login(user, (err) => {
       if (err) {
-        res.send(err)
-      } else if (doc) {
-        bcrypt.compare(password, doc.password, (err, result) => {
-          if (result === true) {
-            res.render("secrets");
-          } else {
-            res.redirect("/login");
-          }
-        })
+        console.log(err);
       } else {
-          res.redirect("/login")
+        passport.authenticate("local")(req, res, () => {
+          res.redirect("/secrets")
+        })
       }
     })
   });
@@ -87,28 +80,22 @@ app.route("/register")
     res.render("register")
   })
   .post((req, res) => {
-    const username = req.body.username
-    const password = req.body.password
-
-    bcrypt.hash(password, saltRounds, (err, hash) => {
-      const newUser = new User({
-        email: username,
-        password: hash
-      })
-      newUser.save(err => {
-        if (err) {
-          console.log(err);
-        } else {
-          res.render("secrets")
-        }
-      })
+    User.register({username: req.body.username}, req.body.password, (err, user) => {
+      if (err) {
+        console.log(error);
+        res.redirect("/register");
+      } else {
+        passport.authenticate("local")(req, res, () => {
+          res.redirect("/secrets")
+        })
+      }
     })
-  }
-);
+  });
 
 app.route("/logout")
   .get((req, res) => {
-    res.redirect("/")
+    req.logout();
+    res.redirect("/");
   });
 
 

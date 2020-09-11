@@ -6,6 +6,9 @@ const mongoose = require('mongoose');
 const encrypt = require('mongoose-encryption');
 const sha = require('sha');
 const crypto = require('crypto');
+const bcrypt = require('bcrypt');
+
+const saltRounds = 10;
 
 var genRandomString = function(length){
     return crypto.randomBytes(Math.ceil(length/2))
@@ -26,9 +29,9 @@ var sha512 = function(password, salt){
 function saltHashPassword(userpassword) {
     var salt = genRandomString(64); /** Gives us salt of length 16 */
     var passwordData = sha512(userpassword, salt);
-    console.log('UserPassword = '+userpassword);
-    console.log('Passwordhash = '+passwordData.passwordHash);
-    console.log('nSalt = '+passwordData.salt);
+    // console.log('UserPassword = '+userpassword);
+    // console.log('Passwordhash = '+passwordData.passwordHash);
+    // console.log('nSalt = '+passwordData.salt);
     return passwordData
 }
 
@@ -42,7 +45,7 @@ mongoose.connect("mongodb://192.168.159.200/users", { useNewUrlParser: true, use
 
 const userSchema = new mongoose.Schema({
   email: String,
-  password: Object
+  password: String
 });
 
 // const secret = process.env.SECRETKEY
@@ -66,19 +69,19 @@ app.route("/login")
       if (err) {
         res.send(err)
       } else if (doc) {
-        let salt = doc.password.salt
-        let submittedHash = sha512(password, salt)
-        console.log(submittedHash)
-        if (doc.password.passwordHash === submittedHash.passwordHash) {
-          res.render("secrets");
-        } else {
-          res.redirect("/login")
+        bcrypt.compare(password, doc.password, (err, result) => {
+          if (result === true) {
+            res.render("secrets");
+          } else {
+            res.redirect("/login")
+          }
+        )} else {
+            res.redirect("/login")
         }
-      } else {
-        res.redirect("/login")
       }
-    })
-  });
+    )
+  }
+);
 
 app.route("/register")
   .get((req, res) => {
@@ -87,16 +90,19 @@ app.route("/register")
   .post((req, res) => {
     const username = req.body.username
     const password = req.body.password
-    const newUser = new User({
-      email: username,
-      password: saltHashPassword(password)
-    })
-    newUser.save(err => {
-      if (err) {
-        console.log(err);
-      } else {
-        res.render("secrets")
-      }
+
+    bcrypt.hash(password, saltRounds, (err, hash) => {
+      const newUser = new User({
+        email: username,
+        password: hash
+      })
+      newUser.save(err => {
+        if (err) {
+          console.log(err);
+        } else {
+          res.render("secrets")
+        }
+      })
     })
   }
 );

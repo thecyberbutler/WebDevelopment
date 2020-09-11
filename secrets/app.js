@@ -4,6 +4,33 @@ const bodyParser = require('body-parser');
 const ejs = require('ejs');
 const mongoose = require('mongoose');
 const encrypt = require('mongoose-encryption');
+const sha = require('sha');
+const crypto = require('crypto');
+
+var genRandomString = function(length){
+    return crypto.randomBytes(Math.ceil(length/2))
+            .toString('hex') /** convert to hexadecimal format */
+            .slice(0,length);   /** return required number of characters */
+};
+
+var sha512 = function(password, salt){
+    var hash = crypto.createHmac('sha512', salt); /** Hashing algorithm sha512 */
+    hash.update(password);
+    var value = hash.digest('hex');
+    return {
+        salt:salt,
+        passwordHash:value
+    };
+};
+
+function saltHashPassword(userpassword) {
+    var salt = genRandomString(64); /** Gives us salt of length 16 */
+    var passwordData = sha512(userpassword, salt);
+    console.log('UserPassword = '+userpassword);
+    console.log('Passwordhash = '+passwordData.passwordHash);
+    console.log('nSalt = '+passwordData.salt);
+    return passwordData
+}
 
 const app = express();
 
@@ -15,11 +42,11 @@ mongoose.connect("mongodb://192.168.159.200/users", { useNewUrlParser: true, use
 
 const userSchema = new mongoose.Schema({
   email: String,
-  password: String
+  password: Object
 });
 
-const secret = process.env.SECRETKEY
-userSchema.plugin(encrypt, {secret: secret, encryptedFields: ['password']});
+// const secret = process.env.SECRETKEY
+// userSchema.plugin(encrypt, {secret: secret, encryptedFields: ['password']});
 
 const User = new mongoose.model("User", userSchema);
 
@@ -39,7 +66,10 @@ app.route("/login")
       if (err) {
         res.send(err)
       } else if (doc) {
-        if (doc.password === password) {
+        let salt = doc.password.salt
+        let submittedHash = sha512(password, salt)
+        console.log(submittedHash)
+        if (doc.password.passwordHash === submittedHash.passwordHash) {
           res.render("secrets");
         } else {
           res.redirect("/login")
@@ -59,7 +89,7 @@ app.route("/register")
     const password = req.body.password
     const newUser = new User({
       email: username,
-      password: password
+      password: saltHashPassword(password)
     })
     newUser.save(err => {
       if (err) {
